@@ -1,0 +1,216 @@
+package kloss.structures.functions;
+
+import java.awt.Point;
+
+import java.util.Observer;
+import java.util.Observable;
+
+import kloss.graphics.functions.Function;
+
+import kloss.structures.BinaryCanvas;
+import kloss.structures.nodes.AVLNode;
+
+public class AVLLeftRotation extends Function implements Observer {
+
+  protected BinaryCanvas canvas;
+
+  protected AVLNode rotateNode;
+
+  protected AVLNode spareChild  = null;
+  protected AVLNode spareParent = null;
+
+  protected boolean blocked      = false;
+  protected boolean rotationDone = false;
+
+  protected int level;
+  protected int startLevel;
+
+  public AVLLeftRotation(AVLNode node, BinaryCanvas canvas) {
+    this.canvas     = canvas;
+    this.rotateNode = node;
+
+    startLevel = canvas.getLevel();
+
+    level = (int) Math.floor((double) Math.log((double) node.getRank()) /
+			     (double) Math.log((double) 2));
+  }
+
+
+  public void update(Observable observed, Object arg) {
+    if (observed instanceof MoveSubtree) {
+      rotationDone = true;
+      blocked      = false;
+    }
+  }
+
+  public void performFunction() {
+    if (blocked == false) {
+      
+      if (rotationDone) {
+
+	if (spareChild != null) 
+	  spareChild.setParent(spareParent);
+
+	setChanged();
+	notifyObservers();
+
+	if (startLevel > canvas.getLevel())
+	  canvas.addFunction(new ContractTree(canvas));
+	else
+	  canvas.addFunction(new AdjustTree(canvas));
+
+	finished = true;
+      }
+      else {
+
+	AVLNode child = (AVLNode) rotateNode.getLeftChild();
+
+	int[] upperLevelValues = canvas.getLevelValues(level);
+	int[] lowerLevelValues = canvas.getLevelValues(level + 1);
+
+	int xPosition;
+	int yPosition;
+
+	if (child.getBalanceFactor() == AVLNode.UNBALANCED_LEFT) {
+	  System.out.println("In LL");
+
+	  canvas.removeFromRankList(rotateNode);
+
+	  AVLNode rightChild = (AVLNode) child.getRightChild();
+
+	  rotateNode.setLeftChild(rightChild);
+	  if (rightChild != null) {
+
+	    spareChild  = rightChild;
+	    spareParent = rotateNode;
+
+	    rightChild.setParent(null);
+
+	    xPosition = rotateNode.origin().x + upperLevelValues[0] -
+	      lowerLevelValues[0];
+	    yPosition = rotateNode.origin().y + upperLevelValues[0] +
+	      lowerLevelValues[1];
+
+	    Function mover = new MoveSubtree(new Point(xPosition, yPosition),
+					     rightChild);
+	    mover.addObserver(this);
+
+	    canvas.addFunction(mover);
+	  }
+
+	  AVLNode parent = (AVLNode) rotateNode.getParent();
+
+	  child.setParent(parent);
+	  if (parent != null) {
+	    if (rotateNode == (AVLNode) parent.getLeftChild())
+	      parent.setLeftChild(child);
+	    else
+	      parent.setRightChild(child);
+	  }
+
+	  child.setRightChild(rotateNode);
+	  rotateNode.setParent(child);
+
+	  child.setRank(rotateNode.getRank());
+	  canvas.addToRankList(child);
+
+	  xPosition = rotateNode.origin().x + upperLevelValues[0];
+	  yPosition = rotateNode.origin().y + upperLevelValues[1];
+
+	  AVLNode leftChild = (AVLNode) child.getLeftChild();
+
+	  Function moverOne = new MoveNode(new Point(rotateNode.origin().x,
+	    rotateNode.origin().y), child);
+	  Function moverTwo = new MoveSubtree(new Point(xPosition, yPosition),
+					      rotateNode);
+	  Function moverThree = new MoveSubtree(new Point(child.origin().x,
+							  child.origin().y),
+						leftChild);
+
+	  moverOne.addObserver(this);
+	  moverTwo.addObserver(this);
+	  moverThree.addObserver(this);
+
+	  canvas.addFunction(moverOne);
+	  canvas.addFunction(moverTwo);
+	  canvas.addFunction(moverThree);
+
+	  blocked = true;
+	}
+	else {
+	  canvas.removeFromRankList(rotateNode);
+
+	  AVLNode grandChild     = (AVLNode) child.getRightChild();
+	  AVLNode grandChildLeft = (AVLNode) grandChild.getLeftChild();
+
+	  child.setRightChild(grandChildLeft);
+
+	  if (grandChildLeft != null) {
+	    grandChildLeft.setParent(child);
+
+	    Function mover = new MoveSubtree(new Point(grandChild.origin().x,
+	      grandChild.origin().y), grandChildLeft);
+	    mover.addObserver(this);
+
+	    canvas.addFunction(mover);
+	  }
+
+	  AVLNode grandChildRight = (AVLNode) grandChild.getRightChild();
+
+	  rotateNode.setLeftChild(grandChildRight);
+
+	  if (grandChildRight != null) {
+	    spareChild  = grandChildRight;
+	    spareParent = rotateNode;
+
+	    grandChild.setParent(null);
+
+	    xPosition = rotateNode.origin().x + upperLevelValues[0] -
+	      lowerLevelValues[0];
+	    yPosition = rotateNode.origin().y + upperLevelValues[1] +
+	      lowerLevelValues[1];
+	     
+	    Function mover = new MoveSubtree(new Point(xPosition, yPosition),
+					     grandChildRight);
+	    mover.addObserver(this);
+
+	    canvas.addFunction(mover);
+	  }
+
+	  grandChild.setLeftChild(child);
+	  child.setParent(grandChild);
+
+	  AVLNode parent = (AVLNode) rotateNode.getParent();
+	  grandChild.setParent(parent);
+
+	  grandChild.setRightChild(rotateNode);
+	  rotateNode.setParent(grandChild);
+
+	  if (parent != null) {
+	    if (rotateNode == parent.getLeftChild())
+	      parent.setLeftChild(grandChild);
+	    else
+	      parent.setRightChild(grandChild);
+	  }
+
+	  Function moverOne = new MoveSubtree(new Point(rotateNode.origin().x +
+	    upperLevelValues[0], rotateNode.origin().y + upperLevelValues[1]),
+	      rotateNode);
+	  Function moverTwo = new MoveNode(new Point(rotateNode.origin().x,
+            rotateNode.origin().y), grandChild);
+
+	  moverOne.addObserver(this);
+	  moverTwo.addObserver(this);
+
+	  canvas.addFunction(moverOne);
+	  canvas.addFunction(moverTwo);
+
+	  grandChild.setRank(rotateNode.getRank());
+	  canvas.addToRankList(grandChild);
+
+	  blocked = true;
+	}
+      }
+    }
+  }
+}
